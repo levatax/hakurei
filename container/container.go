@@ -35,8 +35,6 @@ type (
 	// Container represents a container environment being prepared or run.
 	// None of [Container] methods are safe for concurrent use.
 	Container struct {
-		// Cgroup fd, nil to disable.
-		Cgroup *int
 		// ExtraFiles passed through to initial process in the container,
 		// with behaviour identical to its [exec.Cmd] counterpart.
 		ExtraFiles []*os.File
@@ -71,6 +69,8 @@ type (
 		Path *check.Absolute
 		// Initial process argv.
 		Args []string
+		// Absolute path to the delegated cgroup directory, nil to disable cgroup enforcement.
+		CgroupPath *check.Absolute
 		// Deliver SIGINT to the initial process on context cancellation.
 		ForwardCancel bool
 		// Time to wait for processes lingering after the initial process terminates.
@@ -251,6 +251,22 @@ func (p *Container) Start() error {
 		p.cmd.Cancel = func() error { return p.cmd.Process.Signal(CancelSignal) }
 	}
 	p.cmd.Dir = fhs.Root
+	var cgroupFile *os.File
+	if p.CgroupPath != nil {
+		if f, err := os.OpenFile(p.CgroupPath.String(), os.O_RDONLY|O_CLOEXEC, 0); err != nil {
+			return &StartError{false, "open cgroup directory", err, false, false}
+		} else {
+			cgroupFile = f
+		}
+	}
+	if cgroupFile != nil {
+		defer func() {
+			if err := cgroupFile.Close(); err != nil {
+				p.msg.Verbosef("cannot close cgroup fd: %v", err)
+			}
+		}()
+	}
+
 	p.cmd.SysProcAttr = &SysProcAttr{
 		Setsid:    !p.RetainSession,
 		Pdeathsig: SIGKILL,
@@ -266,10 +282,10 @@ func (p *Container) Start() error {
 			CAP_DAC_OVERRIDE,
 		},
 
-		UseCgroupFD: p.Cgroup != nil,
 	}
-	if p.cmd.SysProcAttr.UseCgroupFD {
-		p.cmd.SysProcAttr.CgroupFD = *p.Cgroup
+	if cgroupFile != nil {
+		p.cmd.SysProcAttr.UseCgroupFD = true
+		p.cmd.SysProcAttr.CgroupFD = int(cgroupFile.Fd())
 	}
 	if !p.HostNet {
 		p.cmd.SysProcAttr.Cloneflags |= CLONE_NEWNET

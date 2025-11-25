@@ -3,9 +3,11 @@ package system
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"hakurei.app/container/check"
@@ -40,6 +42,49 @@ func TestCriteria(t *testing.T) {
 					got, tc.want)
 			}
 		})
+	}
+}
+
+func TestCgroupOp(t *testing.T) {
+	t.Parallel()
+
+	sys := New(t.Context(), message.New(nil), 0xbeef)
+	base := check.MustAbs(t.TempDir())
+	target := base.Append("hakurei-1", "instance")
+
+	sys.Cgroup(base, target, CgroupLimits{
+		CPU:    50000,
+		Memory: 2048,
+		Pids:   16,
+	})
+
+	if err := sys.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	read := func(name string) string {
+		data, err := os.ReadFile(filepath.Join(target.String(), name))
+		if err != nil {
+			t.Fatalf("ReadFile(%s): %v", name, err)
+		}
+		return string(data)
+	}
+
+	if got := read("cpu.max"); strings.TrimSpace(got) != "50000 100000" {
+		t.Fatalf("cpu.max: %q", got)
+	}
+	if got := read("memory.max"); strings.TrimSpace(got) != "2048" {
+		t.Fatalf("memory.max: %q", got)
+	}
+	if got := read("pids.max"); strings.TrimSpace(got) != "16" {
+		t.Fatalf("pids.max: %q", got)
+	}
+
+	if err := sys.Revert(nil); err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if _, err := os.Stat(target.String()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("target still exists: %v", err)
 	}
 }
 

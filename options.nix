@@ -177,6 +177,40 @@ in
                 '';
               };
 
+              cgroup = {
+                slice = mkOption {
+                  type = nullOr str;
+                  default = null;
+                  description = ''
+                    Absolute path to the delegated cgroup slice. Relative values are resolved beneath /sys/fs/cgroup.
+                  '';
+                };
+
+                limitCPU = mkOption {
+                  type = nullOr int;
+                  default = null;
+                  description = ''
+                    CPU quota in microseconds applied to the default 100000µs period. Null leaves cpu.max untouched.
+                  '';
+                };
+
+                limitMemory = mkOption {
+                  type = nullOr int;
+                  default = null;
+                  description = ''
+                    memory.max value in bytes. Null leaves the current memory limit untouched.
+                  '';
+                };
+
+                limitPids = mkOption {
+                  type = nullOr int;
+                  default = null;
+                  description = ''
+                    pids.max limit. Null disables pid limiting.
+                  '';
+                };
+              };
+
               devel = mkEnableOption "debugging-related kernel interfaces";
               userns = mkEnableOption "user namespace creation";
               tty = mkEnableOption "access to the controlling terminal";

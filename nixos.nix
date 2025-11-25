@@ -218,6 +218,18 @@ in
                         else
                           app.path;
                       args = if app.args == null then [ "${app.name}-start" ] else app.args;
+                      cgroup = let
+                        cg = app.cgroup;
+                        enableCgroup = (cg.slice != null)
+                          || (cg.limitCPU != null)
+                          || (cg.limitMemory != null)
+                          || (cg.limitPids != null);
+                      in optionalAttrs enableCgroup {
+                        slice = cg.slice;
+                        limit_cpu = cg.limitCPU;
+                        limit_memory = cg.limitMemory;
+                        limit_pids = cg.limitPids;
+                      };
                     };
                   };
 

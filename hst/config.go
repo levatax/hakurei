@@ -88,6 +88,10 @@ func (config *Config) Validate() error {
 			Msg: "container configuration missing path to initial program"}
 	}
 
+	if err := config.Container.validateCgroup(); err != nil {
+		return err
+	}
+
 	for key := range config.Container.Env {
 		if strings.IndexByte(key, '=') != -1 || strings.IndexByte(key, 0) != -1 {
 			return &AppError{Step: "validate configuration", Err: ErrEnviron,

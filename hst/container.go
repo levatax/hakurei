@@ -2,6 +2,8 @@ package hst
 
 import (
 	"encoding/json"
+	"errors"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -14,6 +16,9 @@ const PrivateTmp = "/.hakurei"
 
 // AbsPrivateTmp is a [check.Absolute] representation of [PrivateTmp].
 var AbsPrivateTmp = check.MustAbs(PrivateTmp)
+
+// ErrCgroupPath is returned when a cgroup slice resolves outside of the filesystem root.
+var ErrCgroupPath = errors.New("invalid cgroup slice path")
 
 const (
 	// WaitDelayDefault is used when WaitDelay has its zero value.
@@ -145,6 +150,96 @@ type ContainerConfig struct {
 
 	// Flags holds boolean options of [ContainerConfig].
 	Flags Flags `json:"-"`
+
+	// Optional cgroup configuration applied prior to starting the container.
+	Cgroup *CgroupConfig `json:"cgroup,omitempty"`
+}
+
+const (
+	// CgroupRoot is the default root for the unified cgroup hierarchy.
+	CgroupRoot = "/sys/fs/cgroup"
+	// defaultCgroupSlice is used when Slice is left unspecified.
+	defaultCgroupSlice = CgroupRoot + "/hakurei.slice"
+)
+
+// CgroupConfig configures a cgroup v2 subtree for the container.
+type CgroupConfig struct {
+	// Slice denotes the delegated cgroup slice that instances are created under.
+	// Relative values are resolved against CgroupRoot.
+	Slice string `json:"slice,omitempty"`
+	// LimitCPU specifies the microsecond quota applied to the default 100000µs period.
+	// A zero value leaves cpu.max untouched.
+	LimitCPU uint64 `json:"limit_cpu,omitempty"`
+	// LimitMemory caps memory.max in bytes. A zero value keeps the current limit.
+	LimitMemory uint64 `json:"limit_memory,omitempty"`
+	// LimitPids caps pids.max. Zero disables the limit.
+	LimitPids int `json:"limit_pids,omitempty"`
+}
+
+func (config *ContainerConfig) validateCgroup() error {
+	if config.Cgroup == nil {
+		return nil
+	}
+	return config.Cgroup.Validate()
+}
+
+// Validate ensures cgroup constraints are sane.
+func (c *CgroupConfig) Validate() error {
+	if c == nil {
+		return nil
+	}
+	if c.LimitPids < 0 {
+		return &AppError{Step: "validate configuration", Err: syscall.EINVAL,
+			Msg: "cgroup limit pids cannot be negative"}
+	}
+	if _, err := c.slicePath(); err != nil {
+		return &AppError{Step: "validate configuration", Err: err, Msg: "invalid cgroup slice"}
+	}
+	return nil
+}
+
+// SlicePath returns the absolute slice root path.
+func (c *CgroupConfig) SlicePath() (*check.Absolute, error) {
+	if c == nil {
+		return nil, syscall.EINVAL
+	}
+	return c.slicePath()
+}
+
+// InstancePath returns the per-instance cgroup directory path.
+func (c *CgroupConfig) InstancePath(identity string, id *ID) (*check.Absolute, error) {
+	if c == nil || id == nil {
+		return nil, syscall.EINVAL
+	}
+	root, err := c.instanceRoot(identity)
+	if err != nil {
+		return nil, err
+	}
+	return root.Append(id.String()), nil
+}
+
+func (c *CgroupConfig) instanceRoot(identity string) (*check.Absolute, error) {
+	slice, err := c.slicePath()
+	if err != nil {
+		return nil, err
+	}
+	return slice.Append("hakurei-" + identity), nil
+}
+
+func (c *CgroupConfig) slicePath() (*check.Absolute, error) {
+	base := c.Slice
+	if base == "" {
+		base = defaultCgroupSlice
+	}
+	if !path.IsAbs(base) {
+		base = path.Join(CgroupRoot, base)
+	}
+	cleaned := path.Clean(base)
+	abs, err := check.NewAbs(cleaned)
+	if err != nil {
+		return nil, ErrCgroupPath
+	}
+	return abs, nil
 }
 
 // ContainerConfigF is [ContainerConfig] stripped of its methods.

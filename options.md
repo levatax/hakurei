@@ -760,6 +760,78 @@ null or signed integer
 
 
 
+## environment\.hakurei\.apps\.\<name>\.cgroup\.slice
+
+
+
+Absolute path to the delegated cgroup slice. Relative values are resolved beneath `/sys/fs/cgroup`.
+
+
+
+*Type:*
+null or string
+
+
+
+*Default:*
+` null `
+
+
+
+## environment\.hakurei\.apps\.\<name>\.cgroup\.limitCPU
+
+
+
+CPU quota in microseconds applied to the default 100000µs period. Null leaves cpu.max untouched.
+
+
+
+*Type:*
+null or integer
+
+
+
+*Default:*
+` null `
+
+
+
+## environment\.hakurei\.apps\.\<name>\.cgroup\.limitMemory
+
+
+
+memory.max value in bytes. Null leaves the current memory limit untouched.
+
+
+
+*Type:*
+null or integer
+
+
+
+*Default:*
+` null `
+
+
+
+## environment\.hakurei\.apps\.\<name>\.cgroup\.limitPids
+
+
+
+pids.max limit. Null disables pid limiting.
+
+
+
+*Type:*
+null or integer
+
+
+
+*Default:*
+` null `
+
+
+
 ## environment\.hakurei\.commonPaths
 
 

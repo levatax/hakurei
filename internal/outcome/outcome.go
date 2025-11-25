@@ -272,6 +272,7 @@ func (state *outcomeStateSys) toSystem() error {
 	ops := [...]outcomeOp{
 		// must run first
 		&spParamsOp{},
+		&spCgroupOp{},
 
 		&spRuntimeOp{},
 		spTmpdirOp{},
