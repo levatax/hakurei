@@ -23,7 +23,7 @@ func (s *spCgroupOp) toSystem(state *outcomeStateSys) error {
 	if err != nil {
 		return err
 	}
-	instancePath, err := state.Container.Cgroup.InstancePath(state.identity.String(), state.id.String())
+	instancePath, err := state.Container.Cgroup.InstancePath(state.identity.String(), state.ID)
 	if err != nil {
 		return err
 	}
