@@ -37,6 +37,7 @@ type cgroupOp struct {
 	path    string
 	limits  CgroupLimits
 	created []string
+	files   []string
 }
 
 func (c *cgroupOp) Type() hst.Enablement { return Process }
@@ -96,28 +97,29 @@ func (c *cgroupOp) ensurePath(sys *I) error {
 
 func (c *cgroupOp) applyLimits() error {
 	if c.limits.CPU > 0 {
-		if err := c.writeFile("cpu.max", fmt.Sprintf("%d 100000", c.limits.CPU)); err != nil {
+		if err := c.writeControllerFile("cpu.max", fmt.Sprintf("%d 100000", c.limits.CPU)); err != nil {
 			return err
 		}
 	}
 	if c.limits.Memory > 0 {
-		if err := c.writeFile("memory.max", fmt.Sprintf("%d", c.limits.Memory)); err != nil {
+		if err := c.writeControllerFile("memory.max", fmt.Sprintf("%d", c.limits.Memory)); err != nil {
 			return err
 		}
 	}
 	if c.limits.Pids > 0 {
-		if err := c.writeFile("pids.max", fmt.Sprintf("%d", c.limits.Pids)); err != nil {
+		if err := c.writeControllerFile("pids.max", fmt.Sprintf("%d", c.limits.Pids)); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *cgroupOp) writeFile(name, value string) error {
+func (c *cgroupOp) writeControllerFile(name, value string) error {
 	file := filepath.Join(c.path, name)
 	if err := os.WriteFile(file, []byte(value), 0644); err != nil {
 		return newOpError("cgroup", err, false)
 	}
+	c.files = append(c.files, file)
 	return nil
 }
 
@@ -125,6 +127,13 @@ func (c *cgroupOp) revert(sys *I, ec *Criteria) error {
 	if ec != nil && !ec.hasType(Process) {
 		sys.msg.Verbosef("skipping revert for cgroup %q", c.path)
 		return nil
+	}
+
+	for i := len(c.files) - 1; i >= 0; i-- {
+		file := c.files[i]
+		if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+			sys.msg.Verbosef("cannot remove cgroup file %q: %v", file, err)
+		}
 	}
 
 	var errs []error
